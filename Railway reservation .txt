@@ -1,0 +1,449 @@
+﻿import mysql.connector as sql
+import random
+import time
+from datetime import date, datetime
+
+
+# --- DATABASE CONNECTION ---
+def connect():
+    return sql.connect(host="localhost", user="root", password="2301", database="alan")
+
+
+# --- TRAIN DATA ---
+FIXED_TRAINS = [
+    (12025, "Shatabdi Exp", "New Delhi", "Chandigarh", 266, "05:50", 500, 750),
+    (12951, "Mumbai Rajdhani", "Mumbai", "New Delhi", 1384, "17:00", 350, 2500),
+    (12839, "Howrah Exp", "Kolkata", "Chennai", 1662, "23:40", 700, 1800),
+    (16594, "Hampi Express", "Bengaluru", "Hubballi", 470, "22:00", 650, 550),
+    (22692, "Bengaluru Raj", "Bengaluru", "New Delhi", 2369, "20:00", 400, 3200),
+    (12627, "Karnataka Exp", "New Delhi", "Bengaluru", 2369, "21:15", 550, 2900),
+    (17230, "Indian Express", "Hyderabad", "Trivandrum", 1550, "19:40", 800, 1650),
+    (12296, "Bangalore Exp", "Patna", "Bengaluru", 2694, "20:10", 750, 3100),
+    (11019, "Konark Express", "Bhubaneswar", "Mumbai", 1794, "15:20", 900, 1950),
+    (12431, "Trivandrum Exp", "New Delhi", "Trivandrum", 3149, "10:50", 300, 4100)
+]
+
+
+def initialize_trains():
+        try:
+              con = connect()
+              cur = con.cursor()
+        
+        cur.execute("TRUNCATE TABLE train")
+        
+        insert_query = "INSERT INTO train VALUES(%s,%s,%s,%s,%s,%s,%s,%s)"
+        cur.executemany(insert_query, FIXED_TRAINS)
+        
+        con.commit()
+        print("\n[INFO] Train schedule successfully initialized with 10 fixed trains.")
+        
+    except sql.Error as err:
+        print(f"\n[ERROR] Database Error during train initialization: {err}")
+    finally:
+        if con: cur.close(); con.close()
+
+
+# --- UTILITY FUNCTIONS ---
+def draw_box(title):
+    width = 70
+    print("\n+" + "-" * width + "+")
+    print(f"| {title.center(width - 2)} |")
+    print("+" + "-" * width + "+")
+
+
+def draw_footer():
+    width = 70
+    print("+" + "-" * width + "+")
+
+
+def print_table(headers, data):
+    col_widths = [len(h) + 2 for h in headers]
+    if data:
+        for row in data:
+            for i, item in enumerate(row):
+                col_widths[i] = max(col_widths[i], len(str(item)) + 2) 
+
+
+    header_line = "| "
+    for i, header in enumerate(headers):
+        header_line += header.center(col_widths[i] - 2) + " | "
+    print(header_line)
+
+
+    separator = "+" + "+".join(["-" * (w) for w in col_widths]) + "+"
+    print(separator)
+
+
+    for row in data:
+        row_line = "| "
+        for i, item in enumerate(row):
+            row_line += str(item).ljust(col_widths[i] - 2) + " | "
+        print(row_line)
+    
+    print(separator)
+
+
+# ---------- USER REGISTRATION ----------
+def register():
+    try:
+        con = connect()
+        cur = con.cursor()
+
+
+        draw_box("NEW USER REGISTRATION")
+        uid = input(f"|   Create user ID: ")
+        name = input(f"|   Enter your name: ")
+        phone = input(f"|   Enter phone number: ")
+        email = input(f"|   Enter email: ")
+        pwd = input(f"|   Create password: ")
+        draw_footer()
+
+
+        cur.execute("INSERT INTO user VALUES(%s,%s,%s,%s,%s)",
+                    (uid, name, phone, email, pwd))
+        con.commit()
+        print("\nSUCCESS: Account created successfully! Please log in.")
+
+
+    except sql.Error as err:
+        print(f"\nERROR: Database Error: {err}")
+    finally:
+        if con: cur.close(); con.close()
+
+
+# ---------- USER LOGIN ----------
+def login():
+    try:
+        con = connect()
+        cur = con.cursor()
+
+
+        draw_box("USER LOGIN")
+        uid = input(f"|   Enter User ID: ")
+        pwd = input(f"|   Enter password: ")
+        draw_footer()
+
+
+        cur.execute("SELECT * FROM user WHERE user_id=%s AND password=%s", (uid, pwd))
+        data = cur.fetchone()
+
+
+        if data:
+            print(f"\nSUCCESS: Login Successful! Welcome {data[1]}!")
+            return uid
+        else:
+            print("\nERROR: Invalid User ID or password!")
+            return None
+
+
+    except sql.Error as err:
+        print(f"\nERROR: Database Error: {err}")
+        return None
+    finally:
+        if con: cur.close(); con.close()
+
+
+# ---------- VIEW TRAINS ----------
+def view_trains():
+    try:
+        con = connect()
+        cur = con.cursor()
+
+
+        cur.execute("SELECT train_no, name, origin, destination, distance, time, seats, price FROM train ORDER BY train_no")
+        data = cur.fetchall()
+
+
+        draw_box("AVAILABLE TRAIN SCHEDULES")
+        
+        headers = ["Train No", "Name", "From", "To", "Time", "Seats Left", "Price (Rs)"]
+        print_table(headers, data)
+        draw_footer()
+
+
+    except sql.Error as err:
+        print(f"\nERROR: Database Error: {err}")
+    finally:
+        if con: cur.close(); con.close()
+
+
+# ---------- SEARCH TRAIN ----------
+def search_train():
+    try:
+        con = connect()
+        cur = con.cursor()
+
+
+        draw_box("SEARCH TRAIN")
+        org = input(f"|   Enter origin station: ")
+        dest = input(f"|   Enter destination station: ")
+        draw_footer()
+
+
+        cur.execute("SELECT train_no, name, origin, destination, time, seats, price FROM train WHERE origin=%s AND destination=%s",
+                    (org, dest))
+        data = cur.fetchall()
+
+
+        if data:
+            print("\nAVAILABLE TRAINS FOR YOUR ROUTE:")
+            headers = ["Train No", "Name", "From", "To", "Time", "Seats Left", "Price (Rs)"]
+            print_table(headers, data)
+        else:
+            print("\nWARNING: No trains found for this route!")
+
+
+    except sql.Error as err:
+        print(f"\nERROR: Database Error: {err}")
+    finally:
+        if con: cur.close(); con.close()
+
+
+# ---------- BOOK TICKET ----------
+def book_ticket(uid):
+    view_trains() 
+
+
+    try:
+        con = connect()
+        cur = con.cursor()
+
+
+        draw_box("BOOK TICKET")
+        tno = int(input(f"|   Enter Train Number to book: "))
+        
+        date_str = input(f"|   Enter Reservation Date (YYYY-MM-DD): ")
+        
+        try:
+            reservation_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            if reservation_date < date.today():
+                print("\nERROR: Cannot book a ticket for a past date.")
+                draw_footer()
+                return
+        except ValueError:
+            print("\nERROR: Invalid date format. Please use YYYY-MM-DD.")
+            draw_footer()
+            return
+            
+        pname = input(f"|   Passenger name: ")
+        age = int(input(f"|   Passenger age: "))
+        seat = int(input(f"|   How many seats to book: "))
+        draw_footer()
+
+
+        cur.execute("SELECT * FROM train WHERE train_no=%s", (tno,))
+        train = cur.fetchone()
+
+
+        if not train:
+            print("\nERROR: Invalid train number!")
+            return
+
+
+        available_seats = train[6]
+        ticket_price = train[7]
+
+
+        if seat <= 0:
+            print("\nERROR: Number of seats must be positive.")
+            return
+
+
+        if seat > available_seats:
+            print(f"\nWARNING: Not enough seats available! Only {available_seats} seats left.")
+            return
+
+
+        total = seat * ticket_price
+        pnr = random.randint(100000, 999999)
+
+
+        # 1. Insert Booking Record
+        cur.execute("INSERT INTO booking VALUES(%s,%s,%s,%s,%s,%s,%s)",
+                    (pnr, uid, tno, pname, age, seat, total))
+
+
+        # 2. Update Train Seats
+        cur.execute("UPDATE train SET seats=seats-%s WHERE train_no=%s",
+                    (seat, tno))
+
+
+        con.commit()
+
+
+        print_ticket_receipt(pnr, train, pname, age, seat, total, reservation_date)
+
+
+    except ValueError:
+        print("\nERROR: Invalid input. Ensure Train number, Age, and Seats are numeric.")
+    except sql.Error as err:
+        print(f"\nERROR: Database Error: {err}")
+    finally:
+        if con: cur.close(); con.close()
+
+
+# --- TICKET RECEIPT ---
+def print_ticket_receipt(pnr, train_details, pname, age, seat, total, res_date):
+    
+    TNO, TNAME, ORG, DEST, DIST, TIME, _, _ = train_details
+    
+    WIDTH = 68 
+    
+    print("\n+" + "=" * WIDTH + "+")
+    print(f"| {'TICKET BOOKING CONFIRMATION'.center(WIDTH)} |")
+    print("+" + "=" * WIDTH + "+")
+    
+    # PNR Block
+    pnr_text = f" PNR NO: {pnr} "
+    print(f"|{pnr_text.center(WIDTH)}|")
+    print("+" + "-" * WIDTH + "+")
+
+
+    # Train Details 
+    print(f"| Train No: {TNO:<10} Train Name: {TNAME:<40} |") 
+    
+    # Route Details 
+    route_info = f"{ORG} -> {DEST}"
+    print(f"| Route:    {route_info:<58} |")
+    
+    # Departure and Date Details
+    print(f"| Departure: {TIME:<10} Date: {res_date:<10} Distance: {DIST} KM {' ' * (20 - len(str(DIST)))}|")
+    
+    print("+" + "-" * WIDTH + "+")
+
+
+    # Passenger Details 
+    print(f"| PASSENGER: {pname:<25} AGE: {age:<5} SEATS BOOKED: {seat:<5} {' ' * (WIDTH - 59)}|")
+    
+    print("+" + "-" * WIDTH + "+")
+
+
+    # Fare Details 
+    print(f"| FARE DETAILS: {' ' * (WIDTH - 16)}|") 
+    
+    # Ticket Price
+    price_label = "Ticket Price (per seat): "
+    price_value = f"Rs{train_details[7]:.2f}"
+    print(f"|   {price_label}{price_value:>{WIDTH - 4 - len(price_label)}} |")
+
+
+    # Total Fare
+    total_label = "Total Fare Paid: "
+    total_value = f"Rs{total:.2f}"
+    print(f"|   {total_label}{total_value:>{WIDTH - 4 - len(total_label)}} |")
+    
+    print("+" + "=" * WIDTH + "+")
+    print("\nSUCCESS: Wishing you a safe journey!")
+    time.sleep(1)
+
+
+# ---------- CANCEL TICKET ----------
+def cancel_ticket():
+    try:
+        con = connect()
+        cur = con.cursor()
+
+
+        draw_box("CANCEL TICKET")
+        pnr = int(input(f"|   Enter PNR to cancel: "))
+        draw_footer()
+
+
+        cur.execute("SELECT * FROM booking WHERE pnr=%s", (pnr,))
+        data = cur.fetchone()
+
+
+        if not data:
+            print("\nERROR: Invalid PNR! Booking record not found.")
+            return
+
+
+        seats_to_return = data[5]
+        tno = data[2]
+
+
+        # 1. Delete Booking
+        cur.execute("DELETE FROM booking WHERE pnr=%s", (pnr,))
+        
+        # 2. Update Train Seats (Refund)
+        cur.execute("UPDATE train SET seats=seats+%s WHERE train_no=%s",
+                    (seats_to_return, tno))
+
+
+        con.commit()
+        
+        print(f"\nSUCCESS: Ticket for PNR {pnr} successfully cancelled!")
+        print(f"   Refund processed and {seats_to_return} seats released for Train No. {tno}.")
+
+
+    except ValueError:
+        print("\nERROR: Invalid input. PNR must be a number.")
+    except sql.Error as err:
+        print(f"\nERROR: Database Error: {err}")
+    finally:
+        if con: cur.close(); con.close()
+
+
+# ---------- USER MENU ----------
+def user_menu(uid):
+    while True:
+        print("\n+" + "-" * 30 + "+")
+        print(f"| {'USER PANEL'.center(28)} |")
+        print("+" + "=" * 30 + "+")
+        print(f"| 1. View Train Schedule {' '*7}|")
+        print(f"| 2. Search Train by Route {' '*7}|")
+        print(f"| 3. Book Ticket {' '*15}|")
+        print(f"| 4. Cancel Ticket {' '*13}|")
+        print(f"| 5. Logout {' '*18}|")
+        print("+" + "-" * 30 + "+")
+
+
+        try:
+            ch = int(input(f"Enter choice ({uid}): "))
+        except ValueError:
+            print("\nERROR: Invalid option! Please enter a number.")
+            continue
+
+
+        if ch == 1: view_trains()
+        elif ch == 2: search_train()
+        elif ch == 3: book_ticket(uid)
+        elif ch == 4: cancel_ticket()
+        elif ch == 5: break
+        else: print("\nERROR: Invalid option!")
+
+
+# ---------- MAIN MENU ----------
+def main():
+    initialize_trains() 
+    
+    while True:
+        print("\n+" + "=" * 50 + "+")
+        print(f"| {'RAILWAY RESERVATION SYSTEM'.center(48)} |")
+        print("+" + "=" * 50 + "+")
+        print(f"| 1. New User Registration {' '*24}|")
+        print(f"| 2. User Login {' '*34}|")
+        print(f"| 3. Exit {' '*40}|")
+        print("+" + "-" * 50 + "+")
+
+
+        try:
+            ch = int(input("Enter your choice: "))
+        except ValueError:
+            print("\nERROR: Invalid choice! Please enter a number.")
+            continue
+
+
+        if ch == 1: register()
+        elif ch == 2:
+            uid = login()
+            if uid: user_menu(uid)
+        elif ch == 3:
+            print("\nThank you for using the Railway Reservation System!")
+            break
+        else:
+            print("\nERROR: Invalid choice!")
+
+
+if __name__ == "__main__":
+    main()
